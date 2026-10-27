@@ -1,0 +1,196 @@
+math.randomseed(os.time())
+
+-- CẤU HÌNH GAME
+local CHEAT_MODE = false -- Chuyển thành true nếu muốn bật hack
+local TOTAL_CHILDREN = 10
+
+local player = {
+    night = 1,
+    maxNights = 99,
+    wood = 0,
+    food = 10,
+    health = 100,
+    gun = false,
+    ammo = 0,
+    childrenRescued = 0,
+    inventory = {
+        ["Hop cuu thuong"] = 0
+    }
+}
+
+-- HÀM BỔ TRỢ
+local function addItem(name, qty)
+    player.inventory[name] = (player.inventory[name] or 0) + qty
+end
+
+local function showStatus()
+    print(string.format("\n================ ĐÊM %d/%d ================", player.night, player.maxNights))
+    print(string.format("❤️ Máu: %d/100 | 🍖 Thức ăn: %d | 🪵 Gỗ: %d", player.health, player.food, player.wood))
+    print(string.format("🔫 Súng: %s | 🎒 Đạn: %d", player.gun and "Có" or "Không", player.ammo))
+    print(string.format("👶 Trẻ em đã cứu: %d/%d", player.childrenRescued, TOTAL_CHILDREN))
+    print(string.format("📦 Hộp cứu thương: %d", player.inventory["Hop cuu thuong"] or 0))
+    print("===========================================")
+end
+
+-- Hệ thống tiêu hao sinh tồn khi hành động (Ăn tự động khi qua đêm/hành động)
+local function consumeFood()
+    if player.food > 0 then
+        player.food = player.food - 1
+        print("-> Bạn tiêu hao 1 thức ăn để duy trì thể lực.")
+    else
+        player.health = player.health - 15
+        print("-> ⚠️ Bạn không còn thức ăn! Bị đói và mất 15 máu.")
+    end
+end
+
+-- SỰ KIỆN QUA ĐÊM (Quái vật tấn công hoặc nhặt được đồ)
+local function nightEvent()
+    print("\n--- Đêm buông xuống... ---")
+    consumeFood() -- Kiểm tra đói khát trước khi sự kiện đêm diễn ra
+    if player.health <= 0 then return end
+
+    local roll = math.random(1, 100)
+    if roll <= 25 then
+        local dmg = CHEAT_MODE and 0 or math.random(10, 25)
+        player.health = player.health - dmg
+        print("👹 Quái vật tấn công! Bạn mất " .. dmg .. " máu.")
+    elseif roll <= 45 then
+        addItem("Hop cuu thuong", 1)
+        print("📦 Bạn tìm thấy một Hộp cứu thương khi đang lẩn trốn.")
+    else
+        print("🌌 Một đêm trôi qua yên bình.")
+    end
+    
+    if player.health > 0 then
+        player.night = player.night + 1
+    end
+end
+
+-- HÀM HÀNH ĐỘNG
+local function gatherWood()
+    local amount = CHEAT_MODE and 999 or math.random(2, 6)
+    player.wood = player.wood + amount
+    print("\n🪵 Bạn vào rừng thu thập được " .. amount .. " gỗ.")
+    nightEvent() -- Hành động tốn 1 đêm
+end
+
+local function craftGun()
+    if CHEAT_MODE then
+        player.gun = true
+        player.ammo = 999
+        print("\n[CHEAT] Đã nhận súng và đạn vô hạn!")
+        return
+    end
+    if player.wood >= 20 then
+        player.wood = player.wood - 20
+        player.gun = true
+        player.ammo = player.ammo + 10
+        print("\n🔨 Bạn đã chế tạo súng thành công! (Nhận 10 viên đạn)")
+    else
+        print("\n❌ Không đủ gỗ để chế tạo súng (cần 20 gỗ).")
+    end
+end
+
+local function hunt()
+    if not player.gun then
+        print("\n❌ Bạn chưa có súng để đi săn!")
+        return
+    end
+    if player.ammo <= 0 then
+        print("\n❌ Hết đạn rồi!")
+        return
+    end
+    
+    player.ammo = player.ammo - 1
+    if math.random() < 0.65 then
+        local meat = math.random(3, 6)
+        player.food = player.food + meat
+        print("\n🎯 Bạn săn được thú rừng và mang về " .. meat .. " thức ăn.")
+    else
+        print("\n🎯 Bạn nổ súng nhưng con mồi đã chạy thoát.")
+    end
+    nightEvent() -- Hành động tốn 1 đêm
+end
+
+local function useMedkit()
+    local count = player.inventory["Hop cuu thuong"] or 0
+    if count > 0 then
+        player.inventory["Hop cuu thuong"] = count - 1
+        player.health = math.min(100, player.health + 40)
+        print("\n❤️ Bạn sử dụng Hộp cứu thương và hồi 40 máu!")
+    else
+        print("\n❌ Bạn không có Hộp cứu thương nào!")
+    end
+end
+
+local function rescueChild()
+    if player.childrenRescued >= TOTAL_CHILDREN then
+        print("\n✨ Tất cả trẻ em đã được cứu an toàn!")
+        return
+    end
+    
+    print("\n🕵️ Bạn đi sâu vào vùng nguy hiểm để tìm kiếm trẻ em...")
+    if CHEAT_MODE or math.random() < 0.5 then
+        player.childrenRescued = player.childrenRescued + 1
+        print("👶 [THÀNH CÔNG] Bạn đã tìm thấy và giải cứu một đứa trẻ!")
+    else
+        print("💨 Bạn tìm kiếm khắp nơi nhưng không thấy ai.")
+    end
+    nightEvent() -- Hành động tốn 1 đêm
+end
+
+-- KIỂM TRA ĐIỀU KIỆN THẮNG / THUA
+local function checkGameOver()
+    if player.health <= 0 then
+        print("\n💀 GAME OVER: Bạn đã bị gục ngã trong rừng sâu. Trò chơi kết thúc.")
+        return true
+    end
+    if player.childrenRescued >= TOTAL_CHILDREN then
+        print("\n🏆 [ĐẠI THẮNG] Tuyệt vời! Bạn đã cứu sống toàn bộ 10 đứa trẻ và đưa chúng thoát khỏi khu rừng!")
+        return true
+    end
+    if player.night > player.maxNights then
+        print(string.format("\n🎉 [CHIẾN THẮNG] Chúc mừng! Bạn đã sống sót thành công qua %d đêm!", player.maxNights))
+        print(string.format("👉 Kết quả: Bạn cứu được %d/%d trẻ em.", player.childrenRescued, TOTAL_CHILDREN))
+        return true
+    end
+    return false
+end
+
+local function printMenu()
+    print("\n--- Bạn sẽ làm gì hôm nay? ---")
+    print("1. Đi nhặt gỗ (Tốn 1 đêm)")
+    print("2. Chế tạo súng (Cần 20 gỗ - Không tốn đêm)")
+    print("3. Đi săn thú   (Cần súng & đạn - Tốn 1 đêm)")
+    print("4. Sử dụng Hộp cứu thương (+40 Máu)")
+    print("5. Đi tìm kiếm cứu trẻ em (Tốn 1 đêm)")
+    print("6. Nghỉ ngơi tại chỗ (Qua đêm tiếp theo)")
+    print("0. Thoát game")
+    io.write("Lựa chọn của bạn: ")
+end
+
+-- LUỒNG CHÍNH CỦA GAME
+print("=== 99 ĐÊM TRONG RỪNG ===")
+if CHEAT_MODE then print("[CẢNH BÁO] Chế độ HACK/CHEAT đang bật!") end
+
+while true do
+    showStatus()
+    printMenu()
+    local choice = io.read()
+    
+    if choice == "1" then gatherWood()
+    elseif choice == "2" then craftGun()
+    elseif choice == "3" then hunt()
+    elseif choice == "4" then useMedkit()
+    elseif choice == "5" then rescueChild()
+    elseif choice == "6" then nightEvent()
+    elseif choice == "0" then
+        print("Tạm biệt! Hẹn gặp lại bạn lần sau.")
+        break
+    else
+        print("\n❌ Lựa chọn không hợp lệ. Vui lòng chọn lại.")
+    end
+
+    -- Kiểm tra kết thúc game ngay lập tức sau mỗi hành động
+    if checkGameOver() then break end
+end
